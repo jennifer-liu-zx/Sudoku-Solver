@@ -220,15 +220,20 @@ function initOCR() {
         preprocessCell(cctx, outSize);
         if (isCellEmpty(cellCanvas)) continue;
 
-        // Try PSM 6 first; fall back to PSM 10 (single character) if no digit found
+        // PSM 6 → PSM 10 → PSM 13 fallback chain
         let { data: { text } } = await worker.recognize(cellCanvas);
         let match = text.trim().match(/[1-9]/);
         if (!match) {
           await worker.setParameters({ tessedit_pageseg_mode: '10' });
           ({ data: { text } } = await worker.recognize(cellCanvas));
           match = text.trim().match(/[1-9]/);
-          await worker.setParameters({ tessedit_pageseg_mode: '6' });
         }
+        if (!match) {
+          await worker.setParameters({ tessedit_pageseg_mode: '13' });
+          ({ data: { text } } = await worker.recognize(cellCanvas));
+          match = text.trim().match(/[1-9]/);
+        }
+        await worker.setParameters({ tessedit_pageseg_mode: '6' });
         if (match) values[row * 9 + col] = parseInt(match[0]);
       }
     }
@@ -275,7 +280,7 @@ function initOCR() {
     for (let i = 0; i < data.length; i += 4) {
       if (data[i] < 128) dark++;
     }
-    return dark / (data.length / 4) < 0.005;
+    return dark / (data.length / 4) < 0.003;
   }
 
   // Draw detected digits over the preview canvas, aligned to the detected grid corners
