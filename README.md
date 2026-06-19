@@ -2,7 +2,7 @@
 
 A browser-based sudoku solver with image recognition. Enter a puzzle manually or upload a photo of a printed grid and it will extract the digits automatically.
 
-**Live demo:** https://YOUR_USERNAME.github.io/sudoku-solver
+**Live demo:** https://jennifer-liu-zx.github.io/sudoku-solver
 
 ## Features
 
