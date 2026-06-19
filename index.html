@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sudoku Solver</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="sudoku.css">
+</head>
+<body>
+
+<header>
+  <h1>Sudoku Solver</h1>
+</header>
+
+<div id="prompt-row">
+  <span id="prompt-text">Scan a puzzle</span>
+  <button id="btn-upload">Upload Image</button>
+</div>
+
+<div id="grid-wrapper">
+  <div id="grid"></div>
+</div>
+
+<div id="controls">
+  <button id="btn-solve">Solve</button>
+  <button id="btn-clear">Clear</button>
+  <button id="btn-example">Example</button>
+</div>
+
+<div id="status"></div>
+
+<div class="legend">
+  <span><span class="legend-dot g"></span>Given</span>
+  <span><span class="legend-dot s"></span>Solved</span>
+</div>
+
+<!-- Hidden file input for image upload -->
+<input type="file" id="ocr-file-input" accept="image/*" style="display:none">
+
+<!-- OCR preview modal -->
+<div id="ocr-modal">
+  <div id="ocr-modal-box">
+    <p id="ocr-modal-title">Detected Grid</p>
+    <canvas id="ocr-canvas"></canvas>
+    <p id="ocr-status" class="ocr-status"></p>
+    <div id="ocr-modal-controls">
+      <button id="ocr-confirm" disabled>Confirm</button>
+      <button id="ocr-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tesseract.js -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<!-- OpenCV.js — loaded async so it doesn't block the page -->
+<script>
+  function onOpenCvReady() {
+    cv['onRuntimeInitialized'] = () => {
+      window._cvReady = true;
+      console.log('[OCR] OpenCV.js ready');
+    };
+  }
+</script>
+<script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
+
+<!-- Solver + UI logic -->
+<script src="sudoku.js"></script>
+<!-- OCR module -->
+<script src="ocr.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => initOCR());
+</script>
+
+</body>
+</html>
