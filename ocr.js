@@ -60,16 +60,21 @@ function initOCR() {
 
     try {
       setOcrStatus('Detecting grid…', 'loading');
-      const gridCanvas = extractGrid(img);
-      if (!gridCanvas) {
+      const result = extractGrid(img);
+      if (!result) {
         setOcrStatus('Could not detect a sudoku grid. Try a clearer image.', 'fail');
         return;
       }
 
+      // Scale detected corners from working-canvas space into preview-canvas space
+      const { gridCanvas, corners: workCorners, workScale } = result;
+      const ratio = previewScale / workScale;
+      const previewCorners = workCorners.map(p => ({ x: p.x * ratio, y: p.y * ratio }));
+
       setOcrStatus('Recognising digits…', 'loading');
       const values = await recogniseDigits(gridCanvas);
 
-      drawOverlay(values);
+      drawOverlay(values, previewCorners);
 
       pendingValues = values;
       btnConfirm.disabled = false;
@@ -98,9 +103,9 @@ function initOCR() {
   function extractGrid(img) {
     const workSize = 900;
     const oc = document.createElement('canvas');
-    const scale = Math.min(workSize / img.width, workSize / img.height, 1);
-    oc.width  = Math.round(img.width  * scale);
-    oc.height = Math.round(img.height * scale);
+    const workScale = Math.min(workSize / img.width, workSize / img.height, 1);
+    oc.width  = Math.round(img.width  * workScale);
+    oc.height = Math.round(img.height * workScale);
     oc.getContext('2d').drawImage(img, 0, 0, oc.width, oc.height);
 
     let src       = cv.imread(oc);
@@ -148,7 +153,7 @@ function initOCR() {
         contour.delete();
       }
 
-      if (!bestCorners) return null;
+      if (!bestCorners) return null; // bestCorners are in working-canvas coordinates
 
       // Perspective-warp to 630×630 (= 70px per cell)
       const dstSize = 630;
@@ -166,7 +171,7 @@ function initOCR() {
       cv.imshow(dest, warped);
 
       srcPts.delete(); dstPts.delete(); M.delete(); warped.delete();
-      return dest;
+      return { gridCanvas: dest, corners: bestCorners, workScale };
 
     } finally {
       src.delete(); gray.delete(); blurred.delete();
@@ -273,26 +278,54 @@ function initOCR() {
     return dark / (data.length / 4) < 0.005;
   }
 
-  // Draw detected digits over the preview canvas
-  function drawOverlay(values) {
-    const cw = modalCanvas.width;
-    const ch = modalCanvas.height;
+  // Draw detected digits over the preview canvas, aligned to the detected grid corners
+  function drawOverlay(values, corners) {
+    const [TL, TR, BR, BL] = corners;
+
+    // Bilinear interpolation: map normalised (tx, ty) → pixel position in preview
+    function bilerp(tx, ty) {
+      return {
+        x: (1-ty)*((1-tx)*TL.x + tx*TR.x) + ty*((1-tx)*BL.x + tx*BR.x),
+        y: (1-ty)*((1-tx)*TL.y + tx*TR.y) + ty*((1-tx)*BL.y + tx*BR.y),
+      };
+    }
+
+    // Scale font to actual cell size in the preview image
+    const gridW  = Math.hypot(TR.x - TL.x, TR.y - TL.y);
+    const gridH  = Math.hypot(BL.x - TL.x, BL.y - TL.y);
+    const cellPx = Math.min(gridW, gridH) / 9;
+
     ctx.save();
-    ctx.font         = `bold ${Math.floor(cw / 12)}px DM Mono, monospace`;
+    ctx.font         = `bold ${Math.max(8, Math.floor(cellPx * 0.65))}px DM Mono, monospace`;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
-
-    const cellW = cw / 9;
-    const cellH = ch / 9;
 
     for (let i = 0; i < 81; i++) {
       if (!values[i]) continue;
       const col = i % 9;
       const row = Math.floor(i / 9);
+
+      const tx0 = col / 9, tx1 = (col + 1) / 9;
+      const ty0 = row / 9, ty1 = (row + 1) / 9;
+
+      const c00    = bilerp(tx0, ty0);
+      const c10    = bilerp(tx1, ty0);
+      const c11    = bilerp(tx1, ty1);
+      const c01    = bilerp(tx0, ty1);
+      const center = bilerp((tx0 + tx1) / 2, (ty0 + ty1) / 2);
+
+      // Fill the cell quadrilateral (handles perspective skew)
       ctx.fillStyle = 'rgba(201,168,76,0.7)';
-      ctx.fillRect(col * cellW + 2, row * cellH + 2, cellW - 4, cellH - 4);
+      ctx.beginPath();
+      ctx.moveTo(c00.x, c00.y);
+      ctx.lineTo(c10.x, c10.y);
+      ctx.lineTo(c11.x, c11.y);
+      ctx.lineTo(c01.x, c01.y);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.fillStyle = '#0f0e0c';
-      ctx.fillText(values[i], col * cellW + cellW / 2, row * cellH + cellH / 2);
+      ctx.fillText(values[i], center.x, center.y);
     }
     ctx.restore();
   }
